@@ -1,11 +1,12 @@
+import 'dart:io' show Platform;
+
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/flutter/overlay.dart';
 import 'package:appflowy_editor/src/infra/clipboard.dart';
 import 'package:appflowy_editor/src/render/color_menu/color_picker.dart';
+import 'package:appflowy_editor/src/render/color_menu/highlight_color_picker.dart';
 import 'package:appflowy_editor/src/render/link_menu/link_menu.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart' hide Overlay, OverlayEntry;
 
 typedef ToolbarItemEventHandler = void Function(
@@ -272,14 +273,11 @@ List<ToolbarItem> defaultToolbarItems = [
     highlightCallback: (editorState) => _allSatisfy(
       editorState,
       BuiltInAttributeKey.backgroundColor,
-      (value) {
-        return value != null && value != '0x00000000'; // transparent color;
-      },
+      (value) =>
+          value != null &&
+          value != _generateBackgroundColorOptions(editorState).first.colorHex,
     ),
-    handler: (editorState, context) => formatHighlight(
-      editorState,
-      editorState.editorStyle.highlightColorHex!,
-    ),
+    handler: (editorState, context) => showHighlightMenu(context, editorState),
   ),
   ToolbarItem(
     id: 'appflowy.toolbar.color',
@@ -567,6 +565,82 @@ void showColorMenu(
             },
             onSubmittedFontColorHex: (color) {
               formatFontColor(
+                editorState,
+                color,
+              );
+              _dismissOverlay();
+            },
+          ),
+        ),
+      );
+    },
+  );
+  Overlay.of(context)?.insert(_overlay!);
+
+  editorState.service.scrollService?.disable();
+  editorState.service.keyboardService?.disable();
+  editorState.service.selectionService.currentSelection
+      .addListener(_dismissOverlay);
+}
+
+void showHighlightMenu(
+  BuildContext context,
+  EditorState editorState, {
+  Selection? customSelection,
+}) {
+  final rects = editorState.service.selectionService.selectionRects;
+  var maxBottom = 0.0;
+  late Rect matchRect;
+  for (final rect in rects) {
+    if (rect.bottom > maxBottom) {
+      maxBottom = rect.bottom;
+      matchRect = rect;
+    }
+  }
+  final baseOffset =
+      editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+  matchRect = matchRect.shift(-baseOffset);
+
+  _dismissOverlay();
+  _editorState = editorState;
+
+  final selection = customSelection ??
+      editorState.service.selectionService.currentSelection.value;
+
+  final node = editorState.service.selectionService.currentSelectedNodes;
+  if (selection == null || node.isEmpty || node.first is! TextNode) {
+    return;
+  }
+  final textNode = node.first as TextNode;
+
+  String? highlightColorHex;
+  if (textNode.allSatisfyBackgroundColorInSelection(selection)) {
+    highlightColorHex = textNode.getAttributeInSelection<String>(
+      selection,
+      BuiltInAttributeKey.highlightColor,
+    );
+  }
+
+  final style = editorState.editorStyle;
+  _overlay = OverlayEntry(
+    builder: (context) {
+      return Positioned(
+        top: matchRect.bottom + 5.0,
+        left: matchRect.left + 10,
+        child: Material(
+          color: Colors.transparent,
+          child: HighlightColorPicker(
+            editorState: editorState,
+            pickerBackgroundColor:
+                style.selectionMenuBackgroundColor ?? Colors.white,
+            pickerItemHoverColor:
+                style.popupMenuHoverColor ?? Colors.blue.withOpacity(0.3),
+            pickerItemTextColor:
+                style.selectionMenuItemTextColor ?? Colors.black,
+            selectedHighlightColorHex: highlightColorHex,
+            highlightColorOptions: _generateBackgroundColorOptions(editorState),
+            onSubmittedhighlightColorHex: (color) {
+              formatHighlightColor(
                 editorState,
                 color,
               );
