@@ -18,6 +18,7 @@ class BuiltInAttributeKey {
   static String strikethrough = 'strikethrough';
   static String color = 'color';
   static String backgroundColor = 'backgroundColor';
+  static String highlightColor = 'highlightColor';
   static String font = 'font';
   static String href = 'href';
 
